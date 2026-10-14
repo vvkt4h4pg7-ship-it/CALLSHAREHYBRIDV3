@@ -431,11 +431,18 @@ final class WiFiTransport {
                     self.scheduleUplinkReconnect(reason: "unexpected-cancel")
                 }
             case .waiting:
-                // The path is temporarily unavailable. Stop feeding NWConnection and
-                // discard stale live audio rather than letting queued PCM accumulate.
-                // Network.framework can transition this connection back to .ready.
+                // A waiting UDP connection can remain stuck after a Wi-Fi/hotspot
+                // handover. Do not retain it indefinitely: detach this connection,
+                // drop stale live PCM, and let the bounded backoff recreate it.
+                // On .ready, startUplink sends a fresh J7WC HELLO to rediscover the
+                // iPhone source address at the Core without any periodic IP polling.
                 self.uplinkIsReady = false
                 self.pendingTX.removeAll(keepingCapacity: true)
+                if self.uplink === connection {
+                    self.uplink = nil
+                    connection.cancel()
+                    self.scheduleUplinkReconnect(reason: "waiting")
+                }
             default:
                 break
             }
@@ -498,8 +505,14 @@ final class WiFiTransport {
                     self.controlUplink = nil
                     self.scheduleControlReconnect(reason: "unexpected-cancel")
                 }
-            case .waiting(let error):
-                self.discardStatus("[WIFI] CONTROL UPLINK WAITING host=\(targetHost) error=\(error.localizedDescription)")
+            case .waiting:
+                // Keep the legacy control transport recoverable too; call control
+                // remains BLE-owned, while this UDP channel is compatibility-only.
+                if self.controlUplink === connection {
+                    self.controlUplink = nil
+                    connection.cancel()
+                    self.scheduleControlReconnect(reason: "waiting")
+                }
             default:
                 break
             }
