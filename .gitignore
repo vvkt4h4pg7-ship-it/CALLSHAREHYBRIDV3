@@ -1,0 +1,14 @@
+.DS_Store
+**/xcuserdata/
+**/DerivedData/
+**/build/
+**/.build/
+*.ipa
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+*.key
+*.p8
+*.jks
+AuthKey_*.p8
